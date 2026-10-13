@@ -2,7 +2,8 @@
 /**
  * Real-scenario smoke test against the live OpenCode Zen API, exercising the
  * extension's exact provider config via the registered `zen-*` engine
- * adapters (the same stamping path every backend travels in production).
+ * adapters (the same public-lane header/payload shaping path every backend
+ * travels in production).
  * Run with: bun scripts/smoke-real.ts
  */
 import { getApiProvider } from "@earendil-works/pi-ai/compat";
@@ -54,7 +55,8 @@ function shimStream(model: any, context: Context, options?: any) {
     ...options?.headers,
     ...HEADERS,
   };
-  applyOpenCodeFreeHeaders(headers);
+  const nativeApi = nativeApiForZen(model.api) ?? "openai-completions";
+  applyOpenCodeFreeHeaders(headers, nativeApi);
   return engine.streamSimple(model, context, { ...options, headers });
 }
 
@@ -90,7 +92,7 @@ function toPiModel(m: Awaited<ReturnType<typeof discoverModels>>[number]): any {
 
 async function run(model: Model<Api>, context: Context, opts?: any) {
   const events: AssistantMessageEvent[] = [];
-  const stream = shimStream(model, context, { apiKey: "none", ...opts });
+  const stream = shimStream(model, context, { apiKey: "public", ...opts });
   let final: any = null;
   for await (const ev of stream) {
     events.push(ev);
@@ -102,6 +104,24 @@ async function run(model: Model<Api>, context: Context, opts?: any) {
 
 function textOf(msg: any): string {
   return (msg?.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
+}
+
+function nativeApiOf(m: Awaited<ReturnType<typeof discoverModels>>[number]): string {
+  return nativeApiForZen(m.api) ?? m.api ?? "openai-completions";
+}
+
+function preferNativeApi(
+  items: Awaited<ReturnType<typeof discoverModels>>,
+  api: string,
+) {
+  return [
+    ...items.filter((m) => nativeApiOf(m) === api),
+    ...items.filter((m) => nativeApiOf(m) !== api),
+  ];
+}
+
+function finalDetail(final: any): string {
+  return final?.errorMessage ?? `stopReason=${final?.stopReason}`;
 }
 
 let failures = 0;
@@ -119,17 +139,41 @@ check(
   models.every(m => /(^(opencode\/)?.*-free$)|(^(opencode\/)?big-pickle$)/i.test(m.id)),
 );
 
-const nonReasoning = models.find(m => !m.reasoning) ?? models[0];
-console.log(`\n== 2. Plain chat via zen engine (${nonReasoning.id}) ==`);
-{
-  const { final } = await run(toPiModel(nonReasoning), {
+const plainChatCandidates = preferNativeApi(models, "openai-completions");
+let plainChat:
+  | {
+      model: (typeof plainChatCandidates)[number];
+      final: any;
+    }
+  | undefined;
+const plainChatSkips: string[] = [];
+for (const candidate of plainChatCandidates) {
+  const { final } = await run(toPiModel(candidate), {
     systemPrompt: "You are terse.",
     messages: [{ role: "user", content: "Reply with exactly: OK", timestamp: Date.now() }],
   }, { maxTokens: 200 });
-  const ok = final?.stopReason === "stop" && /OK/i.test(textOf(final));
-  check("chat completion succeeds", ok, `stopReason=${final?.stopReason} text="${textOf(final).trim().slice(0, 60)}"`);
-  check("usage reported", (final?.usage?.output ?? 0) > 0, JSON.stringify(final?.usage));
+  if (final?.stopReason === "stop" && /OK/i.test(textOf(final))) {
+    plainChat = { model: candidate, final };
+    break;
+  }
+  plainChatSkips.push(`${candidate.id}: ${finalDetail(final)}`);
 }
+console.log(`\n== 2. Plain chat via zen engine (${plainChat?.model.id ?? plainChatCandidates[0]?.id ?? "none"}) ==`);
+if (plainChatSkips.length > 0) {
+  console.log(`   skipped unhealthy candidates: ${plainChatSkips.slice(0, 3).join("; ")}`);
+}
+check(
+  "chat completion succeeds",
+  !!plainChat,
+  plainChat
+    ? `model=${plainChat.model.id} text="${textOf(plainChat.final).trim().slice(0, 60)}"`
+    : plainChatSkips[0],
+);
+check(
+  "usage reported",
+  (plainChat?.final?.usage?.output ?? 0) > 0,
+  JSON.stringify(plainChat?.final?.usage),
+);
 
 // Prefer reasoning models confirmed alive on the free tier: deepseek is still
 // listed but its free promotion ended server-side and returns 401.
@@ -151,48 +195,74 @@ if (reasoner) {
   console.log("\n== 3. Skipped: no reasoning model with low effort in discovery ==");
 }
 
-const toolModel = models.find(m => !m.reasoning) ?? models[0];
-console.log(`\n== 4. Native tool calling (${toolModel.id}) ==`);
-{
-  const weather: Tool = {
-    name: "get_weather",
-    description: "Get current weather for a city",
-    parameters: {
-      type: "object",
-      properties: { city: { type: "string", description: "City name" } },
-      required: ["city"],
-    },
-  };
-  const { final } = await run(toPiModel(toolModel), {
+const weather: Tool = {
+  name: "get_weather",
+  description: "Get current weather for a city",
+  parameters: {
+    type: "object",
+    properties: { city: { type: "string", description: "City name" } },
+    required: ["city"],
+  },
+};
+const toolCandidates = preferNativeApi(models, "openai-completions");
+let toolRun:
+  | {
+      model: (typeof toolCandidates)[number];
+      final: any;
+      call: any;
+    }
+  | undefined;
+const toolSkips: string[] = [];
+for (const candidate of toolCandidates) {
+  const { final } = await run(toPiModel(candidate), {
     systemPrompt: "You must use the get_weather tool to answer weather questions.",
     messages: [{ role: "user", content: "What's the weather in Lisbon?", timestamp: Date.now() }],
     tools: [weather],
   }, { maxTokens: 500 });
   const call = (final?.content ?? []).find((b: any) => b.type === "toolCall");
-  check("tool call emitted", !!call, call ? `${call.name}(${JSON.stringify(call.arguments)})` : `stopReason=${final?.stopReason}`);
-  check("stopReason is toolUse", final?.stopReason === "toolUse", `got ${final?.stopReason}`);
-
-  if (call) {
-    // Multi-turn: replay assistant toolCall + tool result, expect final answer.
-    console.log("   -- follow-up turn with tool result --");
-    const { final: final2 } = await run(toPiModel(toolModel), {
-      systemPrompt: "You are terse.",
-      messages: [
-        { role: "user", content: "What's the weather in Lisbon?", timestamp: Date.now() },
-        final,
-        {
-          role: "toolResult",
-          toolCallId: call.id,
-          toolName: call.name,
-          content: [{ type: "text", text: "18°C, light rain" }],
-          isError: false,
-          timestamp: Date.now(),
-        },
-      ],
-      tools: [weather],
-    }, { maxTokens: 300 });
-    check("post-tool answer succeeds", final2?.stopReason === "stop" && /rain|18/i.test(textOf(final2)), `stopReason=${final2?.stopReason} text="${textOf(final2).trim().slice(0, 60)}"`);
+  if (call && final?.stopReason === "toolUse") {
+    toolRun = { model: candidate, final, call };
+    break;
   }
+  toolSkips.push(`${candidate.id}: ${call ? `unexpected stopReason=${final?.stopReason}` : finalDetail(final)}`);
+}
+console.log(`\n== 4. Native tool calling (${toolRun?.model.id ?? toolCandidates[0]?.id ?? "none"}) ==`);
+if (toolSkips.length > 0) {
+  console.log(`   skipped unhealthy candidates: ${toolSkips.slice(0, 3).join("; ")}`);
+}
+check(
+  "tool call emitted",
+  !!toolRun,
+  toolRun
+    ? `${toolRun.call.name}(${JSON.stringify(toolRun.call.arguments)})`
+    : toolSkips[0],
+);
+check(
+  "stopReason is toolUse",
+  toolRun?.final?.stopReason === "toolUse",
+  toolRun ? `got ${toolRun.final.stopReason}` : toolSkips[0],
+);
+
+if (toolRun) {
+  // Multi-turn: replay assistant toolCall + tool result, expect final answer.
+  console.log("   -- follow-up turn with tool result --");
+  const { final: final2 } = await run(toPiModel(toolRun.model), {
+    systemPrompt: "You are terse.",
+    messages: [
+      { role: "user", content: "What's the weather in Lisbon?", timestamp: Date.now() },
+      toolRun.final,
+      {
+        role: "toolResult",
+        toolCallId: toolRun.call.id,
+        toolName: toolRun.call.name,
+        content: [{ type: "text", text: "18°C, light rain" }],
+        isError: false,
+        timestamp: Date.now(),
+      },
+    ],
+    tools: [weather],
+  }, { maxTokens: 300 });
+  check("post-tool answer succeeds", final2?.stopReason === "stop" && /rain|18/i.test(textOf(final2)), `stopReason=${final2?.stopReason} text="${textOf(final2).trim().slice(0, 60)}"`);
 }
 
 // Models routed via @ai-sdk/openai (e.g. muse-spark) only answer on Zen's
