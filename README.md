@@ -1,21 +1,19 @@
 # Pi-opencode-free
 
-Free OpenCode models in [Pi](https://github.com/earendil-works/pi), no API key.
+Free OpenCode models in [Pi](https://github.com/earendil-works/pi), with no personal API key.
 
 ## Why
 
-The Pi CLI already ships an `opencode` provider, but through it the models only run on paid plans. This extension hits the same endpoint for the models advertised as free and sends the OpenCode client headers (`x-opencode-client`, `x-opencode-project`, `User-Agent`, `x-opencode-session`/`x-opencode-request`) on every request.
+The Pi CLI already ships an `opencode` provider, but through it the models only run on paid plans. This extension hits the same endpoint for the models advertised as free and shapes requests for OpenCode's public lane.
 
-> Pure keyless: no key, no account, no paid plan. Note that Zen currently
-> rejects anonymous traffic outside OpenCode with `403 FreeTierError:
-> OpenCode's free tier can only be used from within OpenCode` (verified
-> 2026-09-18 — even a correct `User-Agent` + full `x-opencode-*` headers
-> fail; chat, tools, and compaction/summarization all fail the same way).
-> This extension sends the exact OpenCode client identity so requests are
-> indistinguishable from OpenCode's own; if Zen opens anonymous access
-> again, everything works with zero configuration.
+> No personal key, no account, no paid plan. Zen's free lane is **not**
+> truly anonymous though: it currently accepts requests only when they carry
+> the shared upstream credential `public`, official OpenCode identity
+> headers/session format, and agent-shaped streaming payloads with the core
+> coding tools. This extension applies all of that automatically, so Pi
+> users do not need to provide their own secret.
 
-Everything else is Pi's native engines with per-model dispatch, exactly like the stock `opencode` provider: streaming, reasoning, tools. There are two interception points, and they share one transform (`src/zen-headers.ts`): a `before_provider_headers` hook, and one stamping engine adapter per Zen backend — `zen-openai-completions`, `zen-openai-responses`, `zen-anthropic-messages`, `zen-google-generative-ai` (`src/zen-engines.ts`). Models point at those adapters, so the stamp travels with the provider config even where no ambient hook runs: foreground (`async:false`) subagent children. Each request gets the OpenCode identity headers stamped on it and every auth header nulled, so neither the `"none"` placeholder nor any stored credential ever leaks on the wire. Because subagent children also launch with ambient extensions disabled, the entry file additionally registers itself as a host-required child extension for the session (`src/required-child.ts`, best-effort, no-op without `pi-subagents`). Two base URLs are used: `https://opencode.ai/zen/v1` for OpenAI-compatible and Google engines, and the bare root `https://opencode.ai/zen` for the Anthropic-messages backend (same split as stock).
+Everything else is Pi's native engines with per-model dispatch, exactly like the stock `opencode` provider: streaming, reasoning, tools. There are two interception points for headers — a `before_provider_headers` hook and one stamping engine adapter per Zen backend (`src/zen-headers.ts`, `src/zen-engines.ts`) — plus request-body shaping in `src/zen-payload.ts`. Models point at `zen-openai-completions`, `zen-openai-responses`, `zen-anthropic-messages`, and `zen-google-generative-ai`, so the same public-lane fixups travel with the provider config even where no ambient hook runs: foreground (`async:false`) subagent children. Each request gets the OpenCode identity headers stamped on it, auth pinned to the shared `public` credential (`Authorization: Bearer public` or `x-api-key: public` for Anthropic), and any Pi-stored user credential overwritten before it can leak on the wire. Because subagent children also launch with ambient extensions disabled, the entry file additionally registers itself as a host-required child extension for the session (`src/required-child.ts`, best-effort, no-op without `pi-subagents`). Two base URLs are used: `https://opencode.ai/zen/v1` for OpenAI-compatible and Google engines, and the bare root `https://opencode.ai/zen` for the Anthropic-messages backend (same split as stock).
 
 ## Install
 
@@ -49,8 +47,9 @@ bun scripts/smoke-real.ts  # live request against Zen
 |------|---------|
 | `src/index.ts` | Native provider registration, per-model config, snapshot persistence |
 | `src/discovery.ts` | Free-model discovery (Zen + models.dev enrichment) |
-| `src/zen-engines.ts` | Per-backend `zen-*` engine adapters (stamp, then delegate to native) |
-| `src/zen-headers.ts` | Shared OpenCode client identity: headers, session/request ids |
+| `src/zen-engines.ts` | Per-backend `zen-*` engine adapters (stamp, shape, then delegate) |
+| `src/zen-headers.ts` | Shared OpenCode client identity: headers, session/request ids, public auth |
+| `src/zen-payload.ts` | Public-lane payload shaping for OpenAI / Responses / Anthropic / Google |
 | `src/required-child.ts` | Self-registration for subagent children (optional `pi-subagents`) |
 | `scripts/smoke-real.ts` | Live end-to-end checks against the Zen API |
 
