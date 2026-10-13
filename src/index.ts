@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { discoverModels, type OpenCodeModelInfo } from "./discovery.js";
 import {
+  OPENCODE_PUBLIC_API_KEY,
   OPENCODE_USER_AGENT,
   ZEN_ANTHROPIC_BASE_URL,
   ZEN_BASE_URL,
@@ -194,8 +195,9 @@ export default function opencodeDirectExtension(pi: ExtensionAPI): void {
 
   // Subagent children launch with ambient extensions disabled, so neither
   // this hook nor the `zen-*` adapters below would load there on their own
-  // (every `opencode-free/*` child then fails with Zen 401 before any tool
-  // runs). Register this entry file as a host-required child extension for
+  // (every `opencode-free/*` child then falls back to an unshaped upstream
+  // request and Zen rejects the public lane before any tool runs). Register
+  // this entry file as a host-required child extension for
   // the current session so children load it like any ordinary extension.
   // Best-effort: the hook swallows its own internal failures (no-op when
   // pi-subagents is absent); the try/catch additionally guards `pi.on`
@@ -228,21 +230,21 @@ export default function opencodeDirectExtension(pi: ExtensionAPI): void {
   // its own `zen-*` api (applyExtension only falls back here when a
   // snapshot entry lacks one).
   //
-  // Auth: pure keyless. `apiKey: "none"` is only the placeholder Pi core
-  // requires (it throws when a provider has no auth method at all); it
-  // never reaches the wire — the header hook and the `zen-*` engine
-  // wrappers null `Authorization` on every request. No `authHeader`, so
-  // Pi-native stored keys are never exposed as `Bearer` in headers.
+  // Auth: OpenCode's shared public credential. The provider is still
+  // zero-config for Pi users — no personal API key, account, or login — but
+  // every request must be pinned to `public` on the wire. The header hook and
+  // the `zen-*` engine wrappers overwrite any resolved credential with that
+  // value, so Pi-native stored keys are never exposed as `Bearer` headers.
   registerZenApiProviders();
   pi.registerProvider(PROVIDER_ID, {
     name: "OpenCode Direct (Free)",
     baseUrl: ZEN_BASE_URL,
     api: ZEN_COMPLETIONS_API,
-    apiKey: "none",
+    apiKey: OPENCODE_PUBLIC_API_KEY,
     headers: {
       "x-opencode-client": "cli",
       "x-opencode-project": "global",
-      // Fallback identity for request paths with no per-request stamping
+      // Fallback identity for request paths with no per-request session signal
       // (defense in depth — every engine stamps via its `zen-*` adapter,
       // and the hook stamps wherever it runs). Canonical shape (never a
       // raw Pi session id); the hook and the adapters overwrite both ids

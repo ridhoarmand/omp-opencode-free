@@ -59,7 +59,7 @@ test("registerZenApiProviders registers all four stamping adapters", async () =>
   }
 });
 
-test("zen engine adapters stamp and delegate on both stream and streamSimple", async () => {
+test("zen engine adapters stamp, shape, and delegate on both stream and streamSimple", async () => {
   const calls: { entry: string; model: any; options: any }[] = [];
   const canned = { marker: "native-engine-stream" };
   const resolveEngine = (_api: any) => ({
@@ -77,6 +77,7 @@ test("zen engine adapters stamp and delegate on both stream and streamSimple", a
   let parentTransformCalls = 0;
   const options = {
     temperature: 0.5,
+    sessionId: "agent-session",
     transformHeaders: async (headers: Record<string, string | null>) => {
       parentTransformCalls++;
       return { "x-opencode-client": "pi", ...headers };
@@ -91,18 +92,38 @@ test("zen engine adapters stamp and delegate on both stream and streamSimple", a
     assert.equal(nativeModel.provider, "opencode-free");
     assert.equal(nativeModel.id, "x");
     assert.equal(engineOptions.temperature, 0.5); // unrelated options pass through
+    assert.equal(engineOptions.apiKey, "public");
+    assert.equal(engineOptions.headers["x-opencode-client"], "cli");
+    assert.equal(engineOptions.headers["x-opencode-project"], "global");
+    assert.equal(engineOptions.headers["x-api-key"], "public");
+    assert.equal(engineOptions.headers.Authorization, null);
+    assert.match(
+      engineOptions.headers["x-opencode-session"],
+      /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/,
+    );
+    assert.equal(
+      engineOptions.headers["x-session-affinity"],
+      engineOptions.headers["x-opencode-session"],
+    );
+    const shaped = await engineOptions.onPayload({ max_tokens: 10 }, nativeModel);
+    assert.equal(shaped.stream, true);
+    assert.deepEqual(
+      shaped.tools.map((tool: any) => tool.name),
+      ["bash", "edit", "glob", "grep", "read"],
+    );
     const stamped = await engineOptions.transformHeaders({
       "x-opencode-client": "cli",
       "x-opencode-project": "global",
       Authorization: "Bearer none",
     });
-    assert.equal(stamped["x-opencode-client"], "cli"); // stamp wins over attribution
+    assert.equal(stamped["x-opencode-client"], "cli");
     assert.match(
       stamped["x-opencode-session"],
       /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/,
     );
     assert.match(stamped["x-opencode-request"], /^msg_[0-9a-f-]{36}$/);
-    assert.equal(stamped.Authorization, null); // placeholder never leaks
+    assert.equal(stamped.Authorization, null);
+    assert.equal(stamped["x-api-key"], "public");
   }
   assert.equal(parentTransformCalls, 2); // core transform runs inside the stamp
 });
@@ -138,7 +159,7 @@ test("zen engine adapters satisfy pi-ai's strict api guard", async () => {
   }
 });
 
-test("zen engine adapters leave foreign traffic untouched", async () => {
+test("zen engine adapters pin the public credential even without ambient hooks", async () => {
   let captured: any = null;
   const functions = createZenEngineFunctions("google-generative-ai", () => ({
     stream: undefined as any,
@@ -150,13 +171,16 @@ test("zen engine adapters leave foreign traffic untouched", async () => {
   (functions.streamSimple as any)(
     { api: ZEN_GOOGLE_API, provider: "opencode-free", id: "x" },
     [],
-    undefined, // no parent transform at all
+    undefined,
   );
+  assert.equal(captured.apiKey, "public");
+  assert.equal(captured.headers["x-opencode-client"], "cli");
+  assert.equal(captured.headers["x-opencode-project"], "global");
   const out = await captured.transformHeaders({
     Authorization: "Bearer real-user-key",
   });
-  assert.equal(out.Authorization, "Bearer real-user-key");
-  assert.equal(out["x-opencode-session"], undefined);
+  assert.equal(out.Authorization, "Bearer public");
+  assert.match(out["x-opencode-session"], /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
 });
 
 test("zen engine adapters fail loud on unknown native engine", async () => {
@@ -178,7 +202,7 @@ test("composeZenTransformHeaders without a parent still stamps", async () => {
     "x-opencode-client": "cli",
     "x-opencode-project": "global",
   });
-  assert.equal(out.Authorization, null);
+  assert.equal(out.Authorization, "Bearer public");
   assert.match(
     (out as any)["x-opencode-session"],
     /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/,

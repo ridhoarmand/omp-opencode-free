@@ -14,7 +14,12 @@ import {
   type ApiStreamFunction,
   type ApiStreamSimpleFunction,
 } from "@earendil-works/pi-ai/compat";
-import { applyOpenCodeFreeHeaders } from "./zen-headers.js";
+import { applyOpenCodeFreePayload } from "./zen-payload.js";
+import {
+  applyOpenCodeFreeHeaders,
+  getHeader,
+  OPENCODE_PUBLIC_API_KEY,
+} from "./zen-headers.js";
 
 /**
  * Zen engine adapters.
@@ -22,19 +27,14 @@ import { applyOpenCodeFreeHeaders } from "./zen-headers.js";
  * Pi's provider composer routes a provider-level `streamSimple` solely to
  * models whose engine matches the provider-level `api`
  * (`model.api === extension.api`), and a provider declares exactly one
- * `api`. One wrapper therefore can never stamp all four Zen backends
- * (completions, responses, Anthropic, Google) — the non-completions models
- * depended solely on the ambient `before_provider_headers` hook, which
- * never fires inside foreground (`async:false`) subagent children. Those
- * children leaked `Authorization: Bearer none` and got Zen `403
- * FreeTierError`.
+ * `api`. One wrapper therefore can never cover all four Zen backends
+ * (completions, responses, Anthropic, Google).
  *
  * Instead this module registers one custom engine adapter per Zen backend
- * (`zen-*`, each stamping then delegating to its native Pi engine). Models
- * point at the `zen-*` ids, so every request — parent, background runner,
- * foreground child — travels through the stamp on every backend, with no
- * ambient hooks required. Registration is idempotent (the compat registry
- * overwrites silently) and fails loud when the engine registry is broken.
+ * (`zen-*`, each shaping the request for Zen's shared `public` lane, then
+ * delegating to Pi's native engine). Models point at the `zen-*` ids, so
+ * every request — parent, background runner, foreground child — travels
+ * through the same header + payload fixups.
  */
 
 /** Native Pi engines behind the Zen gateway (exactly the stock `opencode` routing). */
@@ -94,34 +94,85 @@ export type HeaderTransform = (
   headers: ProviderHeaders,
 ) => ProviderHeaders | Promise<ProviderHeaders>;
 
+type PayloadTransform = (
+  payload: unknown,
+  model: Model<Api>,
+) => unknown | undefined | Promise<unknown | undefined>;
+
+type ZenTransformOptions = {
+  headers?: ProviderHeaders;
+  transformHeaders?: HeaderTransform;
+  onPayload?: PayloadTransform;
+  sessionId?: string;
+  apiKey?: string;
+};
+
 /**
- * Composes Pi core's per-request `transformHeaders` (attribution + hook
- * wherever hooks run) with the Zen identity stamp, so every process —
- * parent, background runner, foreground child — emits identical traffic.
+ * Composes Pi core's per-request `transformHeaders` (attribution + hooks
+ * wherever they run) with the Zen public-lane stamp.
  */
 export function composeZenTransformHeaders(
   parent?: HeaderTransform | undefined,
+  nativeApi?: NativeZenApi,
 ): HeaderTransform {
   return async (headers: ProviderHeaders) => {
     const base = parent ? await parent(headers) : headers;
     const stamped: ProviderHeaders = { ...(base ?? {}) };
-    applyOpenCodeFreeHeaders(stamped);
+    stamped["x-opencode-client"] = "cli";
+    if (!getHeader(stamped, "x-opencode-project")) {
+      stamped["x-opencode-project"] = "global";
+    }
+    applyOpenCodeFreeHeaders(stamped, nativeApi);
     return stamped;
   };
 }
 
+function composeZenOnPayload(
+  parent: PayloadTransform | undefined,
+  nativeApi: NativeZenApi,
+): PayloadTransform {
+  return async (payload: unknown, model: Model<Api>) => {
+    const base = parent ? await parent(payload, model) : payload;
+    return applyOpenCodeFreePayload(
+      base === undefined ? payload : base,
+      nativeApi,
+    );
+  };
+}
+
 /**
- * `transformHeaders` is threaded through request options by Pi core's
- * streamFn (sdk.ts) but is absent from pi-ai's public option types, hence
- * the structural read/cast here (the same one Pi core performs).
+ * Compat/native api adapters do not eagerly apply `transformHeaders` or own
+ * the provider-level stamp, so we shape the request up front as well as pass
+ * the composed transforms through for host paths that consume them.
  */
-function withZenHeaders<O>(options: O): O {
-  const parent = (
-    options as { transformHeaders?: HeaderTransform } | undefined
-  )?.transformHeaders;
+function withZenHeaders<O>(options: O, nativeApi: NativeZenApi): O {
+  const current = options as ZenTransformOptions | undefined;
+  const headers: ProviderHeaders = { ...(current?.headers ?? {}) };
+  headers["x-opencode-client"] = "cli";
+  if (!getHeader(headers, "x-opencode-project")) {
+    headers["x-opencode-project"] = "global";
+  }
+  if (typeof current?.sessionId === "string" && current.sessionId.trim()) {
+    if (!getHeader(headers, "x-session-affinity")) {
+      headers["x-session-affinity"] = current.sessionId;
+    }
+    if (!getHeader(headers, "x-client-request-id")) {
+      headers["x-client-request-id"] = current.sessionId;
+    }
+    if (!getHeader(headers, "x-session-id")) {
+      headers["X-Session-Id"] = current.sessionId;
+    }
+  }
+  applyOpenCodeFreeHeaders(headers, nativeApi);
   return {
     ...((options ?? {}) as Record<string, unknown>),
-    transformHeaders: composeZenTransformHeaders(parent),
+    apiKey: OPENCODE_PUBLIC_API_KEY,
+    headers,
+    transformHeaders: composeZenTransformHeaders(
+      current?.transformHeaders,
+      nativeApi,
+    ),
+    onPayload: composeZenOnPayload(current?.onPayload, nativeApi),
   } as O;
 }
 
@@ -133,17 +184,16 @@ export type EngineResolver = (
 > | undefined;
 
 /**
- * Builds the `{ stream, streamSimple }` pair for one Zen backend: stamp via
- * a composed `transformHeaders`, then delegate straight to the native
- * engine adapter — never to compat's top-level `stream`/`streamSimple`
- * (that would resolve the `zen-*` id back to this same wrapper and
- * recurse).
+ * Builds the `{ stream, streamSimple }` pair for one Zen backend: shape the
+ * request for Zen's public lane, then delegate straight to the native engine
+ * adapter — never to compat's top-level `stream`/`streamSimple` (that would
+ * resolve the `zen-*` id back to this same wrapper and recurse).
  *
  * Pi-ai's `registerApiProvider` wraps every native engine with a strict
  * `model.api === api` guard (`Mismatched api: ... expected ...`). Models
- * reaching this adapter carry the `zen-*` id, so the model must be
- * re-keyed to `nativeApi` before delegating — otherwise every non-default
- * backend fails with e.g. `Mismatched api: zen-openai-responses expected
+ * reaching this adapter carry the `zen-*` id, so the model must be re-keyed
+ * to `nativeApi` before delegating — otherwise every non-default backend
+ * fails with e.g. `Mismatched api: zen-openai-responses expected
  * openai-responses`.
  *
  * `resolveEngine` is injectable for tests; production always uses the real
@@ -170,7 +220,12 @@ export function createZenEngineFunctions(
     model: Model<Api>,
     context: Context,
     options?: StreamOptions,
-  ) => resolve().stream(toNativeModel(model), context, withZenHeaders(options));
+  ) =>
+    resolve().stream(
+      toNativeModel(model),
+      context,
+      withZenHeaders(options, nativeApi),
+    );
   const streamSimple: ApiStreamSimpleFunction = (
     model: Model<Api>,
     context: Context,
@@ -179,7 +234,7 @@ export function createZenEngineFunctions(
     resolve().streamSimple(
       toNativeModel(model),
       context,
-      withZenHeaders(options),
+      withZenHeaders(options, nativeApi),
     );
   return { stream, streamSimple };
 }

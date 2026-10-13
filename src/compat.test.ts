@@ -6,6 +6,13 @@ import opencodeDirectExtension, {
   COMPLETIONS_COMPAT,
   RESPONSES_COMPAT,
 } from "./index.js";
+import {
+  canonicalSessionId,
+  CANONICAL_SESSION_PATTERN,
+  DESCENDING_TIME_PART_PATTERN,
+  applyOpenCodeFreeHeaders,
+  OPENCODE_PUBLIC_API_KEY,
+} from "./zen-headers.js";
 
 // Zen request invariants, asserted against the extension's REAL code
 // (compat constants + toProviderModel output), not local mirrors.
@@ -45,7 +52,7 @@ test("compat constants keep max_tokens and never rename it", async () => {
   assert.equal(RESPONSES_COMPAT.sessionAffinityFormat, "openai-nosession");
 });
 
-test("keyless free access applies via header hook and zen engines", async () => {
+test("public-lane free access applies via header hook and zen engines", async () => {
   const cfg = await getConfig();
   // No provider-level streamSimple: one wrapper could never cover all four
   // backends (Pi's composer routes solely default-engine models through
@@ -60,7 +67,7 @@ test("keyless free access applies via header hook and zen engines", async () => 
     Authorization: "Bearer none",
   };
   hook({ headers });
-  assert.equal(headers.Authorization, null);
+  assert.equal(headers.Authorization, "Bearer public");
   assert.equal(headers["x-opencode-client"], "cli");
   assert.match(
     (headers as any)["x-opencode-session"],
@@ -130,4 +137,74 @@ test("models carry zen per-model api with stock-style compat and baseUrl routing
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("canonicalSessionId returns already-canonical OpenCode descending session ID untouched", () => {
+  const canonical = "ses_012345678fc00123456789ABCD";
+  assert.equal(canonicalSessionId(canonical), canonical);
+  const derived = canonicalSessionId("existing-session-seed");
+  assert.equal(canonicalSessionId(derived), derived);
+});
+
+test("canonicalSessionId deterministically maps arbitrary signal to valid canonical session ID with descending time part", () => {
+  const mapped = canonicalSessionId("test-session-id");
+  assert.match(mapped, CANONICAL_SESSION_PATTERN);
+  assert.match(mapped.slice(4, 16), DESCENDING_TIME_PART_PATTERN);
+});
+
+test("canonicalSessionId with no arguments returns a valid canonical session ID", () => {
+  const session = canonicalSessionId();
+  assert.match(session, CANONICAL_SESSION_PATTERN);
+  assert.match(session.slice(4, 16), DESCENDING_TIME_PART_PATTERN);
+});
+
+test("canonicalSessionId is deterministic when called with the same custom signal", () => {
+  const signal = "test-session-id";
+  const first = canonicalSessionId(signal);
+  const second = canonicalSessionId(signal);
+  assert.equal(first, second);
+});
+
+test("applyOpenCodeFreeHeaders removes mixed-case x-opencode-client header", () => {
+  const headers: Record<string, string | null> = {
+    "X-OpenCode-Client": "cli",
+    "x-opencode-project": "global",
+  };
+  applyOpenCodeFreeHeaders(headers);
+  assert.equal(headers["x-opencode-client"], "cli");
+  assert.equal("X-OpenCode-Client" in headers, false);
+});
+
+test("applyOpenCodeFreeHeaders sets x-goog-api-key for google-generative-ai and nulls/omits for others", () => {
+  const googleHeaders: Record<string, string | null> = {
+    "x-opencode-client": "cli",
+    "x-opencode-project": "global",
+  };
+  applyOpenCodeFreeHeaders(googleHeaders, "google-generative-ai");
+  assert.equal(googleHeaders["x-goog-api-key"], OPENCODE_PUBLIC_API_KEY);
+
+  const mixedGoogleHeaders: Record<string, string | null> = {
+    "x-opencode-client": "cli",
+    "x-opencode-project": "global",
+    "X-Goog-Api-Key": "legacy-key",
+  };
+  applyOpenCodeFreeHeaders(mixedGoogleHeaders, "google-generative-ai");
+  assert.equal(mixedGoogleHeaders["x-goog-api-key"], OPENCODE_PUBLIC_API_KEY);
+  assert.equal("X-Goog-Api-Key" in mixedGoogleHeaders, false);
+
+  const openaiHeaders: Record<string, string | null> = {
+    "x-opencode-client": "cli",
+    "x-opencode-project": "global",
+  };
+  applyOpenCodeFreeHeaders(openaiHeaders, "openai-completions");
+  assert.equal("x-goog-api-key" in openaiHeaders, false);
+
+  const openaiHeadersWithKey: Record<string, string | null> = {
+    "x-opencode-client": "cli",
+    "x-opencode-project": "global",
+    "X-Goog-Api-Key": "some-key",
+  };
+  applyOpenCodeFreeHeaders(openaiHeadersWithKey, "openai-completions");
+  assert.equal(openaiHeadersWithKey["x-goog-api-key"], null);
+  assert.equal("X-Goog-Api-Key" in openaiHeadersWithKey, false);
 });

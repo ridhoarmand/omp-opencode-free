@@ -37,7 +37,7 @@ test("registers provider once with empty initial models and no boot fetch", asyn
     assert.equal(registeredConfig.api, "zen-openai-completions"); // per-model default engine (not a dispatch change — every model carries its own zen-* api)
     assert.equal(registeredConfig.baseUrl, "https://opencode.ai/zen/v1");
     assert.equal(registeredConfig.name, "OpenCode Direct (Free)");
-    assert.equal(registeredConfig.apiKey, "none"); // keyless placeholder (Pi core requires an auth method; the hook/wrapper null it on every request)
+    assert.equal(registeredConfig.apiKey, "public"); // shared OpenCode public credential, never a user secret
     assert.equal(registeredConfig.headers["x-opencode-client"], "cli");
     assert.equal(registeredConfig.headers["x-opencode-project"], "global");
     assert.equal(registeredConfig.headers["User-Agent"], "opencode/1.18.31");
@@ -65,7 +65,7 @@ test("registers provider once with empty initial models and no boot fetch", asyn
     );
     assert.match(headers["x-opencode-request"]!, /^msg_[0-9a-f-]{36}$/);
     assert.equal(headers["User-Agent"], "opencode/1.18.31");
-    assert.equal(headers.Authorization, null);
+    assert.equal(headers.Authorization, "Bearer public");
     assert.equal(typeof registeredConfig.refreshModels, "function");
     // No provider-level streamSimple: Pi's composer would route solely the
     // default-engine models through it, so stamping lives in the zen-*
@@ -426,7 +426,7 @@ test("header hook is a no-op when x-opencode-project is missing", async () => {
   assert.equal(headers["x-opencode-session"], undefined);
 });
 
-test("header hook strips any credential on own traffic (pure keyless)", async () => {
+test("header hook pins the shared public credential on own traffic", async () => {
   const handle = await loadWithHeaderHook();
   const headers: Record<string, string | null> = {
     "x-opencode-client": "cli",
@@ -434,7 +434,7 @@ test("header hook strips any credential on own traffic (pure keyless)", async ()
     Authorization: "Bearer sk-live-user-key",
   };
   handle({ headers });
-  assert.equal(headers.Authorization, null);
+  assert.equal(headers.Authorization, "Bearer public");
   // Identity is still stamped (compaction and normal turns share this path).
   assert.match(
     headers["x-opencode-session"]!,
@@ -460,7 +460,7 @@ test("header hook nulls lowercase authorization and native api-key headers", asy
     !("authorization" in headers),
     "lowercase authorization must not survive",
   );
-  assert.equal(headers.Authorization, null);
+  assert.equal(headers.Authorization, "Bearer public");
   assert.equal(headers["x-api-key"], null);
   assert.equal(headers["x-goog-api-key"], null); // normalized to lowercase
   assert.ok(!("X-Goog-Api-Key" in headers), "mixed-case variant must not survive");
@@ -475,9 +475,9 @@ test("header hook leaves absent x-api-key alone", async () => {
     "x-opencode-project": "global",
   };
   handle({ headers });
-  // OpenAI path still nulls to block `apiKey: "none"`; native key headers
-  // stay absent (never added when missing).
-  assert.equal(headers.Authorization, null);
+  // OpenAI path pins the shared public credential; native key headers stay
+  // absent (never added when missing).
+  assert.equal(headers.Authorization, "Bearer public");
   assert.equal("x-api-key" in headers, false);
   assert.equal("x-goog-api-key" in headers, false);
   assert.ok(headers["x-opencode-session"]);
