@@ -21,7 +21,7 @@ Free OpenCode models in [OMP](https://omp.sh) and [Pi](https://github.com/earend
 ### Untuk OMP
 
 ```bash
-omp plugin install git@github.com:ridhoarmand/omp-opencode-free.git
+omp plugin install https://github.com/ridhoarmand/omp-opencode-free.git
 ```
 
 Atau link lokal saat development:
@@ -32,7 +32,7 @@ omp plugin link /path/to/omp-opencode-free
 ### Untuk Pi
 
 ```bash
-pi install git@github.com:ridhoarmand/omp-opencode-free.git
+pi install https://github.com/ridhoarmand/omp-opencode-free.git
 ```
 
 ## Penggunaan
