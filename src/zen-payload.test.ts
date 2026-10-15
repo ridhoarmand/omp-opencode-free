@@ -31,7 +31,7 @@ test("openai completions payload gets stream, usage, and core tools", () => {
   });
   assert.deepEqual(
     toolNames(shaped.tools, (tool) => tool?.function?.name),
-    ["get_weather", "bash", "edit", "glob", "grep", "read"],
+    ["get_weather", "shell", "edit", "glob", "grep", "read"],
   );
 });
 
@@ -44,7 +44,7 @@ test("openai responses payload preserves existing tools and appends missing core
   assert.equal(shaped.stream, true);
   assert.deepEqual(
     toolNames(shaped.tools, (tool) => tool?.name),
-    ["grep", "bash", "edit", "glob", "read"],
+    ["grep", "shell", "edit", "glob", "read"],
   );
 });
 
@@ -56,7 +56,7 @@ test("anthropic payload uses anthropic tool schema with stream enabled", () => {
   assert.equal(shaped.stream, true);
   assert.deepEqual(
     toolNames(shaped.tools, (tool) => tool?.name),
-    ["bash", "edit", "glob", "grep", "read"],
+    ["shell", "edit", "glob", "grep", "read"],
   );
   assert.equal(shaped.tools[0].input_schema.type, "object");
 });
@@ -85,7 +85,7 @@ test("google payload appends missing core tools into existing function declarati
   assert.equal(shaped.config.tools.length, 1);
   assert.deepEqual(
     shaped.config.tools[0].functionDeclarations.map((decl: any) => decl.name),
-    ["read", "bash", "edit", "glob", "grep"],
+    ["read", "shell", "edit", "glob", "grep"],
   );
 });
 
@@ -100,7 +100,7 @@ test("google payload creates a function declaration group when none exists", () 
   assert.equal(shaped.config.tools.length, 1);
   assert.deepEqual(
     shaped.config.tools[0].functionDeclarations.map((decl: any) => decl.name),
-    ["bash", "edit", "glob", "grep", "read"],
+    ["shell", "edit", "glob", "grep", "read"],
   );
 });
 
@@ -112,7 +112,7 @@ test("applyOpenCodeFreePayload works with zen-openai-completions", () => {
   assert.equal(shaped.stream, true);
   assert.deepEqual(
     toolNames(shaped.tools, (tool) => tool?.function?.name),
-    ["bash", "edit", "glob", "grep", "read"],
+    ["shell", "edit", "glob", "grep", "read"],
   );
 });
 
@@ -123,7 +123,7 @@ test("openai completions detects tools with custom or top-level name and does no
       {
         type: "custom",
         custom: {
-          name: "bash",
+          name: "shell",
         },
       },
       {
@@ -135,18 +135,21 @@ test("openai completions detects tools with custom or top-level name and does no
   const shaped = applyOpenCodeFreePayload(payload, "openai-completions") as any;
   assert.deepEqual(
     shaped.tools.map((tool: any) => tool?.function?.name ?? tool?.custom?.name ?? tool?.name),
-    ["bash", "read", "edit", "glob", "grep"],
+    ["shell", "read", "edit", "glob", "grep"],
   );
 });
 
-test("dummy tool descriptions use compliance placeholder warning", () => {
+test("tool descriptions use genuine OpenCode definitions", () => {
   const shaped = applyOpenCodeFreePayload(
     { model: "hy3-free" },
     "openai-completions",
   ) as any;
   assert.equal(
-    shaped.tools[0].function.description,
-    "OpenCode gateway compliance placeholder for bash. Do not call this tool.",
+    shaped.tools[0].function.name,
+    "shell",
+  );
+  assert.ok(
+    shaped.tools[0].function.description.includes("Execute a shell command"),
   );
 });
 

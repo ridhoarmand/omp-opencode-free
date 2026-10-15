@@ -239,7 +239,7 @@ export function createZenEngineFunctions(
   return { stream, streamSimple };
 }
 
-const ZEN_SOURCE_ID = "pi-opencode-free";
+const ZEN_SOURCE_ID = "omp-opencode-free";
 
 /**
  * Registers the four `zen-*` engine adapters. Idempotent: re-registering

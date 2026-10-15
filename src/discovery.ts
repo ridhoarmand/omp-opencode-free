@@ -40,7 +40,7 @@ interface ModelMeta {
   provider?: { npm?: string };
 }
 
-const ZEN_MODELS_URL = "https://opencode.ai/zen/v1/models";
+const ZEN_MODELS_URL = "https://opencode.ai/inference/v1/models";
 const MODELS_DEV_URL = "https://models.dev/api.json";
 /** Refuse catalog payloads larger than this (models.dev is ~4-5 MB). */
 const MAX_CATALOG_BYTES = 25_000_000;
@@ -114,7 +114,9 @@ function baseModelId(id: string): string {
  */
 function mapProviderNpmToApi(
   npm: string | undefined,
+  modelId?: string,
 ): OpenCodeModelInfo["api"] {
+  if (modelId && modelId.includes("muse-spark")) return "openai-responses";
   if (npm === "@ai-sdk/openai") return "openai-responses";
   if (npm === "@ai-sdk/anthropic") return "anthropic-messages";
   if (npm === "@ai-sdk/google") return "google-generative-ai";
@@ -206,7 +208,7 @@ export function filterFreeModels(
         maxTokens: meta?.limit?.output ?? 16_384,
         thinkingLevelMap: buildThinkingLevelMap(meta),
         input: meta?.input,
-        api: mapProviderNpmToApi(ownEntry?.provider?.npm),
+        api: mapProviderNpmToApi(ownEntry?.provider?.npm, m.id),
       };
     });
 }

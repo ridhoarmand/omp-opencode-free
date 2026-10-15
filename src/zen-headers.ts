@@ -11,14 +11,14 @@
 import { createHash, randomUUID } from "node:crypto";
 
 /** Zen base URLs: Anthropic Messages lives at the bare gateway root. */
-export const ZEN_BASE_URL = "https://opencode.ai/zen/v1";
-export const ZEN_ANTHROPIC_BASE_URL = "https://opencode.ai/zen";
+export const ZEN_BASE_URL = "https://opencode.ai/inference/v1";
+export const ZEN_ANTHROPIC_BASE_URL = "https://opencode.ai/inference/v1";
 
 /** Only base URLs we ever persist or restore; anything else is dropped. */
 const TRUSTED_BASE_URLS = new Set([ZEN_BASE_URL, ZEN_ANTHROPIC_BASE_URL]);
 
 /** Official OpenCode client identity expected by Zen's public lane. */
-export const OPENCODE_USER_AGENT = "opencode/1.18.31";
+export const OPENCODE_USER_AGENT = "opencode/latest/2.0.28/cli";
 export const OPENCODE_PUBLIC_API_KEY = "public";
 
 /** Native Pi engines this extension routes models to. */
@@ -151,13 +151,20 @@ export function applyOpenCodeFreeHeaders(
   if (!getHeader(headers, "x-opencode-project")) return;
 
   const session = canonicalSessionId(sessionSignalFromHeaders(headers));
+  const currentProject = getHeader(headers, "x-opencode-project") ?? "global";
+  const project = /^[0-9a-f]{40}$/i.test(currentProject)
+    ? currentProject.toLowerCase()
+    : createHash("sha256").update(`opencode-project\0${currentProject}`).digest("hex").slice(0, 40);
 
   setHeader(headers, "x-opencode-client", "cli");
+  setHeader(headers, "x-opencode-project", project);
   setHeader(headers, "x-opencode-session", session);
+  setHeader(headers, "x-opencode-session-id", session);
   setHeader(headers, "x-session-affinity", session);
   setHeader(headers, "X-Session-Id", session);
-  setHeader(headers, "x-client-request-id", session);
-  setHeader(headers, "x-opencode-request", `msg_${randomUUID()}`);
+  setHeader(headers, "x-session-id", session);
+  deleteHeader(headers, "x-client-request-id");
+  deleteHeader(headers, "x-opencode-request");
   deleteHeader(headers, "user-agent");
   headers["User-Agent"] = OPENCODE_USER_AGENT;
 

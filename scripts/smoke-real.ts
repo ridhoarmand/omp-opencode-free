@@ -267,15 +267,31 @@ if (toolRun) {
 
 // Models routed via @ai-sdk/openai (e.g. muse-spark) only answer on Zen's
 // Responses endpoint — exercises the zen openai-responses engine adapter.
-const responsesModel = models.find(m => m.api === "openai-responses");
-if (responsesModel) {
-  console.log(`\n== 5. Responses-API model via zen engine (${responsesModel.id}) ==`);
-  const { final } = await run(toPiModel(responsesModel), {
-    systemPrompt: "You are terse.",
-    messages: [{ role: "user", content: "Reply with exactly: RESPONSES_OK", timestamp: Date.now() }],
-  }, { maxTokens: 200 });
-  check("responses completion succeeds", final?.stopReason === "stop", `stopReason=${final?.stopReason}`);
-  check("responses answer present", /RESPONSES_OK/i.test(textOf(final)), `"${textOf(final).trim().slice(0, 60)}"`);
+const responsesCandidates = models.filter((m) => m.api === "openai-responses");
+let responsesRun: { model: (typeof responsesCandidates)[number]; final: any } | undefined;
+const responsesSkips: string[] = [];
+for (const candidate of responsesCandidates) {
+  const { final } = await run(
+    toPiModel(candidate),
+    {
+      systemPrompt: "You are terse.",
+      messages: [{ role: "user", content: "Reply with exactly: RESPONSES_OK", timestamp: Date.now() }],
+    },
+    { maxTokens: 1000 },
+  );
+  if (final?.stopReason === "stop" && /RESPONSES_OK/i.test(textOf(final))) {
+    responsesRun = { model: candidate, final };
+    break;
+  }
+  responsesSkips.push(`${candidate.id}: ${finalDetail(final)} text="${textOf(final).trim().slice(0, 40)}"`);
+}
+if (responsesCandidates.length > 0) {
+  console.log(`\n== 5. Responses-API model via zen engine (${responsesRun?.model.id ?? responsesCandidates[0]?.id ?? "none"}) ==`);
+  if (responsesSkips.length > 0) {
+    console.log(`   skipped unhealthy candidates: ${responsesSkips.join("; ")}`);
+  }
+  check("responses completion succeeds", !!responsesRun, responsesRun ? `stopReason=stop` : responsesSkips[0]);
+  check("responses answer present", /RESPONSES_OK/i.test(textOf(responsesRun?.final)), `"${textOf(responsesRun?.final).trim().slice(0, 60)}"`);
 } else {
   console.log("\n== 5. Skipped: no @ai-sdk/openai-routed model in discovery ==");
 }

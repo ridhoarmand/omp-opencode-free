@@ -132,7 +132,7 @@ test("models carry zen per-model api with stock-style compat and baseUrl routing
     // Base URLs: default /v1 inherited, Anthropic bare root override.
     assert.equal(hy3?.baseUrl, undefined);
     assert.equal(muse?.baseUrl, undefined);
-    assert.equal(minimax?.baseUrl, "https://opencode.ai/zen");
+    assert.equal(minimax?.baseUrl, "https://opencode.ai/inference/v1");
     assert.equal(gemini?.baseUrl, undefined);
   } finally {
     globalThis.fetch = originalFetch;

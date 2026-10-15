@@ -1,58 +1,60 @@
-# Pi-opencode-free
+# omp-opencode-free
 
-Free OpenCode models in [Pi](https://github.com/earendil-works/pi), with no personal API key.
+Free OpenCode models in [OMP](https://omp.sh) and [Pi](https://github.com/earendil-works/pi), with no personal API key.
 
-## Why
+## Fitur
 
-The Pi CLI already ships an `opencode` provider, but through it the models only run on paid plans. This extension hits the same endpoint for the models advertised as free and shapes requests for OpenCode's public lane.
+- **Tanpa API Key Pribadi**: Otomatis menyematkan kredensial publik upstream OpenCode (`Authorization: Bearer public`).
+- **Support OMP & Pi**: Mendukung OMP runtime serta Pi coding agent standar.
+- **Fingerprint Gateway Terlengkap**:
+  - Menggunakan endpoint `/inference/v1` terbaru.
+  - User-Agent sesuai OpenCode CLI terbaru (`opencode/latest/.../cli`).
+  - Hashing session dan project ID 40-hex lowercase.
+  - Injeksi definisi skema resmi OpenCode tools (`shell`, `edit`, `glob`, `grep`, `read`).
+- **Dukungan Model Free Lengkap**:
+  - Chat completions (`big-pickle`, `cat-jam-free`, `mimo-v2.6-flash-free`, `step-5-preview-free`, `space-bunny-free`, dll).
+  - Responses API (`muse-spark-1.2-contributor-free`, `muse-spark-1.3-contributor-free`).
+  - Full streaming, reasoning blocks, dan native tool calling.
 
-> No personal key, no account, no paid plan. Zen's free lane is **not**
-> truly anonymous though: it currently accepts requests only when they carry
-> the shared upstream credential `public`, official OpenCode identity
-> headers/session format, and agent-shaped streaming payloads with the core
-> coding tools. This extension applies all of that automatically, so Pi
-> users do not need to provide their own secret.
+## Instalasi
 
-Everything else is Pi's native engines with per-model dispatch, exactly like the stock `opencode` provider: streaming, reasoning, tools. There are two interception points for headers — a `before_provider_headers` hook and one stamping engine adapter per Zen backend (`src/zen-headers.ts`, `src/zen-engines.ts`) — plus request-body shaping in `src/zen-payload.ts`. Models point at `zen-openai-completions`, `zen-openai-responses`, `zen-anthropic-messages`, and `zen-google-generative-ai`, so the same public-lane fixups travel with the provider config even where no ambient hook runs: foreground (`async:false`) subagent children. Each request gets the OpenCode identity headers stamped on it, auth pinned to the shared `public` credential (`Authorization: Bearer public` or `x-api-key: public` for Anthropic), and any Pi-stored user credential overwritten before it can leak on the wire. Because subagent children also launch with ambient extensions disabled, the entry file additionally registers itself as a host-required child extension for the session (`src/required-child.ts`, best-effort, no-op without `pi-subagents`). Two base URLs are used: `https://opencode.ai/zen/v1` for OpenAI-compatible and Google engines, and the bare root `https://opencode.ai/zen` for the Anthropic-messages backend (same split as stock).
-
-## Install
+### Untuk OMP
 
 ```bash
-pi install npm:pi-opencode-free
+omp plugin install git@github.com:ridhoarmand/omp-opencode-free.git
 ```
 
+Atau link lokal saat development:
+```bash
+omp plugin link /path/to/omp-opencode-free
+```
 
-## Usage
+### Untuk Pi
 
-Pick any `(Free)` model in Pi's model selector. The free-model catalog is
-managed natively by Pi: it loads instantly from a persisted snapshot and
-refreshes itself in the background on interactive startup or when opening
-the model selector.
+```bash
+pi install git@github.com:ridhoarmand/omp-opencode-free.git
+```
 
-## Issues & contributions
+## Penggunaan
 
-Found a problem? Open an [issue](../../issues/new). Contributions are welcome.
+Pilih model free dari model picker OMP / Pi (misal `opencode-free/big-pickle`, `opencode-free/cat-jam-free`), atau jalankan langsung dari command line:
 
-## Development
+```bash
+omp -p --model opencode-free/big-pickle "baca file README.md"
+```
 
-Uses [Bun](https://bun.sh)
+## Development & Pengujian
+
+Menggunakan [Bun](https://bun.sh):
 
 ```bash
 bun install
-bun test src/            # unit tests
-bun scripts/smoke-real.ts  # live request against Zen
+bun test src/             # Unit tests (64 passing)
+bun scripts/smoke-real.ts # Live end-to-end tests ke OpenCode Inference API
 ```
 
-| File | Purpose |
-|------|---------|
-| `src/index.ts` | Native provider registration, per-model config, snapshot persistence |
-| `src/discovery.ts` | Free-model discovery (Zen + models.dev enrichment) |
-| `src/zen-engines.ts` | Per-backend `zen-*` engine adapters (stamp, shape, then delegate) |
-| `src/zen-headers.ts` | Shared OpenCode client identity: headers, session/request ids, public auth |
-| `src/zen-payload.ts` | Public-lane payload shaping for OpenAI / Responses / Anthropic / Google |
-| `src/required-child.ts` | Self-registration for subagent children (optional `pi-subagents`) |
-| `scripts/smoke-real.ts` | Live end-to-end checks against the Zen API |
+Untuk panduan reverse engineering dan cara update ketika ada rilis baru OpenCode, baca [MAINTENANCE.md](./MAINTENANCE.md).
 
-## License
+## Lisensi
 
-[GPL-3.0-or-later](./LICENSE) — © 2026 pi-opencode-free contributors
+[GPL-3.0-or-later](./LICENSE) — © 2026 ridhoarmand

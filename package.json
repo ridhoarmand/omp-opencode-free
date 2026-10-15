@@ -1,27 +1,30 @@
 {
-  "name": "pi-opencode-free",
-  "version": "0.2.0",
-  "description": "Zero-daemon, pure-passthrough native Pi extension connecting directly to OpenCode Zen API",
+  "name": "omp-opencode-free",
+  "version": "1.0.0",
+  "description": "Zero-config free OpenCode models provider for OMP and Pi",
   "type": "module",
   "license": "GPL-3.0-or-later",
-  "author": "Pedro Alexis",
+  "author": "ridhoarmand",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pedrostarkealexis/pi-opencode-free.git"
+    "url": "git+https://github.com/ridhoarmand/omp-opencode-free.git"
   },
-  "bugs": "https://github.com/pedrostarkealexis/pi-opencode-free/issues",
-  "homepage": "https://github.com/pedrostarkealexis/pi-opencode-free#readme",
+  "bugs": "https://github.com/ridhoarmand/omp-opencode-free/issues",
+  "homepage": "https://github.com/ridhoarmand/omp-opencode-free#readme",
   "files": [
     "dist",
     "!dist/*.test.*",
     "!dist/**/*.map",
     "index.ts",
+    "omp-entry.ts",
     "src",
     "!src/*.test.*",
     "README.md",
+    "MAINTENANCE.md",
     "LICENSE"
   ],
   "keywords": [
+    "omp-plugin",
     "pi-package",
     "opencode",
     "free-models"

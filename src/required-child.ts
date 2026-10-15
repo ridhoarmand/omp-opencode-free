@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /** Bounded safe id for the required-extension registry. */
-export const REQUIRED_CHILD_EXTENSION_ID = "pi-opencode-free";
+export const REQUIRED_CHILD_EXTENSION_ID = "omp-opencode-free";
 
 /** Subpath import; resolved only via dynamic import so the peer stays optional. */
 const REGISTER_MODULE_SPECIFIER = "pi-subagents/required-child-extensions";

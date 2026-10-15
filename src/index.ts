@@ -243,7 +243,7 @@ export default function opencodeDirectExtension(pi: ExtensionAPI): void {
     apiKey: OPENCODE_PUBLIC_API_KEY,
     headers: {
       "x-opencode-client": "cli",
-      "x-opencode-project": "global",
+      "x-opencode-project": "c0b92d396d341f0eaed3c4fb6e6742620934e44e",
       // Fallback identity for request paths with no per-request session signal
       // (defense in depth — every engine stamps via its `zen-*` adapter,
       // and the hook stamps wherever it runs). Canonical shape (never a
@@ -252,7 +252,7 @@ export default function opencodeDirectExtension(pi: ExtensionAPI): void {
       // OpenCode itself reuses headers on retry, so Zen cannot be keying
       // responses off their uniqueness.
       "x-opencode-session": canonicalSessionId(),
-      "x-opencode-request": `msg_${randomUUID()}`,
+      "x-opencode-session-id": canonicalSessionId(),
       "User-Agent": OPENCODE_USER_AGENT,
     },
     models: [],

@@ -53,7 +53,7 @@ test("registerZenApiProviders registers all four stamping adapters", async () =>
       (ids as string[]).includes(reg.api as string),
       `registered api is a zen id: ${String(reg.api)}`,
     );
-    assert.equal(reg.sourceId, "pi-opencode-free");
+    assert.equal(reg.sourceId, "omp-opencode-free");
     assert.equal(typeof (reg as any).stream, "function");
     assert.equal(typeof (reg as any).streamSimple, "function");
   }
@@ -94,7 +94,7 @@ test("zen engine adapters stamp, shape, and delegate on both stream and streamSi
     assert.equal(engineOptions.temperature, 0.5); // unrelated options pass through
     assert.equal(engineOptions.apiKey, "public");
     assert.equal(engineOptions.headers["x-opencode-client"], "cli");
-    assert.equal(engineOptions.headers["x-opencode-project"], "global");
+    assert.match(engineOptions.headers["x-opencode-project"], /^[0-9a-f]{40}$/);
     assert.equal(engineOptions.headers["x-api-key"], "public");
     assert.equal(engineOptions.headers.Authorization, null);
     assert.match(
@@ -109,7 +109,7 @@ test("zen engine adapters stamp, shape, and delegate on both stream and streamSi
     assert.equal(shaped.stream, true);
     assert.deepEqual(
       shaped.tools.map((tool: any) => tool.name),
-      ["bash", "edit", "glob", "grep", "read"],
+      ["shell", "edit", "glob", "grep", "read"],
     );
     const stamped = await engineOptions.transformHeaders({
       "x-opencode-client": "cli",
@@ -121,7 +121,7 @@ test("zen engine adapters stamp, shape, and delegate on both stream and streamSi
       stamped["x-opencode-session"],
       /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/,
     );
-    assert.match(stamped["x-opencode-request"], /^msg_[0-9a-f-]{36}$/);
+    assert.equal(stamped["x-opencode-request"], undefined);
     assert.equal(stamped.Authorization, null);
     assert.equal(stamped["x-api-key"], "public");
   }
@@ -175,7 +175,7 @@ test("zen engine adapters pin the public credential even without ambient hooks",
   );
   assert.equal(captured.apiKey, "public");
   assert.equal(captured.headers["x-opencode-client"], "cli");
-  assert.equal(captured.headers["x-opencode-project"], "global");
+  assert.match(captured.headers["x-opencode-project"], /^[0-9a-f]{40}$/);
   const out = await captured.transformHeaders({
     Authorization: "Bearer real-user-key",
   });

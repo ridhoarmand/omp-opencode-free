@@ -35,20 +35,17 @@ test("registers provider once with empty initial models and no boot fetch", asyn
     assert.equal(fetchCount, 0); // no fetch during extension load
     assert.deepEqual(registeredConfig.models, []); // populated by refreshModels
     assert.equal(registeredConfig.api, "zen-openai-completions"); // per-model default engine (not a dispatch change — every model carries its own zen-* api)
-    assert.equal(registeredConfig.baseUrl, "https://opencode.ai/zen/v1");
+    assert.equal(registeredConfig.baseUrl, "https://opencode.ai/inference/v1");
     assert.equal(registeredConfig.name, "OpenCode Direct (Free)");
     assert.equal(registeredConfig.apiKey, "public"); // shared OpenCode public credential, never a user secret
     assert.equal(registeredConfig.headers["x-opencode-client"], "cli");
-    assert.equal(registeredConfig.headers["x-opencode-project"], "global");
-    assert.equal(registeredConfig.headers["User-Agent"], "opencode/1.18.31");
+    assert.equal(registeredConfig.headers["x-opencode-project"], "c0b92d396d341f0eaed3c4fb6e6742620934e44e");
+    assert.equal(registeredConfig.headers["User-Agent"], "opencode/latest/2.0.28/cli");
     assert.match(
       registeredConfig.headers["x-opencode-session"],
       /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/, // canonical fallback for paths without per-request stamping (foreground children on non-completions engines)
     );
-    assert.match(
-      registeredConfig.headers["x-opencode-request"],
-      /^msg_[0-9a-f-]{36}$/,
-    );
+    assert.equal(registeredConfig.headers["x-opencode-request"], undefined);
     assert.equal(registeredConfig.headers.Authorization, undefined);
     assert.equal(registeredConfig.authHeader, undefined); // no authHeader: Pi-native stored keys are never exposed as Bearer
     assert.equal(typeof hooks.headersHandler, "function");
@@ -63,8 +60,8 @@ test("registers provider once with empty initial models and no boot fetch", asyn
       headers["x-opencode-session"]!,
       /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/,
     );
-    assert.match(headers["x-opencode-request"]!, /^msg_[0-9a-f-]{36}$/);
-    assert.equal(headers["User-Agent"], "opencode/1.18.31");
+    assert.equal(headers["x-opencode-request"], undefined);
+    assert.equal(headers["User-Agent"], "opencode/latest/2.0.28/cli");
     assert.equal(headers.Authorization, "Bearer public");
     assert.equal(typeof registeredConfig.refreshModels, "function");
     // No provider-level streamSimple: Pi's composer would route solely the
@@ -194,7 +191,7 @@ test("cache-only refresh restores persisted snapshot without network", async () 
     assert.equal((restored[0] as any).baseUrl, undefined); // default baseUrl inherited from provider
     assert.equal((restored[1] as any).api, "zen-openai-responses"); // zen engine per model
     assert.equal((restored[2] as any).api, "zen-anthropic-messages");
-    assert.equal((restored[2] as any).baseUrl, "https://opencode.ai/zen"); // non-default baseUrl preserved
+    assert.equal((restored[2] as any).baseUrl, "https://opencode.ai/inference/v1"); // non-default baseUrl preserved
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -440,8 +437,8 @@ test("header hook pins the shared public credential on own traffic", async () =>
     headers["x-opencode-session"]!,
     /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/,
   );
-  assert.match(headers["x-opencode-request"]!, /^msg_[0-9a-f-]{36}$/);
-  assert.equal(headers["User-Agent"], "opencode/1.18.31");
+  assert.equal(headers["x-opencode-request"], undefined);
+  assert.equal(headers["User-Agent"], "opencode/latest/2.0.28/cli");
   assert.equal(headers["x-opencode-client"], "cli");
 });
 
@@ -464,7 +461,7 @@ test("header hook nulls lowercase authorization and native api-key headers", asy
   assert.equal(headers["x-api-key"], null);
   assert.equal(headers["x-goog-api-key"], null); // normalized to lowercase
   assert.ok(!("X-Goog-Api-Key" in headers), "mixed-case variant must not survive");
-  assert.equal(headers["User-Agent"], "opencode/1.18.31");
+  assert.equal(headers["User-Agent"], "opencode/latest/2.0.28/cli");
   assert.ok(!("user-agent" in headers), "lowercase user-agent must not survive");
 });
 
@@ -516,7 +513,7 @@ test("cache-only refresh re-derives anthropic baseUrl from legacy snapshots", as
     });
     assert.equal(restored.length, 1);
     assert.equal((restored[0] as any).api, "zen-anthropic-messages");
-    assert.equal((restored[0] as any).baseUrl, "https://opencode.ai/zen");
+    assert.equal((restored[0] as any).baseUrl, "https://opencode.ai/inference/v1");
   } finally {
     globalThis.fetch = originalFetch;
   }
