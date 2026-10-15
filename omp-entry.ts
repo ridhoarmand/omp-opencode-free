@@ -27,21 +27,26 @@ import { discoverModels } from "./src/discovery.js";
 
 export const PROVIDER_ID = "opencode-free";
 
-// Fallback catalog (live discovery refreshes on `omp models` refresh;
+ // Fallback catalog (live discovery refreshes on `omp models` refresh;
 // ids without a known engine default to chat completions, except
-// Muse Spark which is Responses-only).
-const FALLBACK: { id: string; api?: string }[] = [
-  { id: "big-pickle" },
-  { id: "cat-jam-free" },
-  { id: "mimo-v2.6-flash-free" },
-  { id: "muse-spark-1.3-contributor-free", api: "openai-responses" },
-  { id: "nemotron-3.5-lightning-free" },
-  { id: "step-5-preview-free" },
-  { id: "longcat-2.5-preview-free" },
-  { id: "space-bunny-free" },
+// Muse Spark which is Responses-only). Limits mirror models.dev's
+// `opencode` provider section; jev-1.13-free is a Zen-only alias with no
+// catalog entry, so it keeps the conservative defaults.
+const FALLBACK: { id: string; api?: string; contextWindow?: number; maxTokens?: number }[] = [
+  { id: "big-pickle", contextWindow: 200_000, maxTokens: 32_000 },
+  { id: "cat-jam-free", contextWindow: 262_144, maxTokens: 131_072 },
+  { id: "mimo-v2.6-flash-free", contextWindow: 200_000, maxTokens: 32_000 },
+  { id: "muse-spark-1.2-contributor-free", api: "openai-responses", contextWindow: 1_048_576, maxTokens: 131_072 },
+  { id: "muse-spark-1.3-contributor-free", api: "openai-responses", contextWindow: 1_048_576, maxTokens: 131_072 },
+  { id: "nemotron-3.5-lightning-free", contextWindow: 262_144, maxTokens: 262_144 },
+  { id: "jev-1.13-free" },
+  { id: "step-5-preview-free", contextWindow: 1_000_000, maxTokens: 65_536 },
+  { id: "longcat-2.5-preview-free", contextWindow: 1_000_000, maxTokens: 131_072 },
+  { id: "deepseek-v4.1-flash-free", contextWindow: 200_000, maxTokens: 32_000 },
+  { id: "space-bunny-free", contextWindow: 1_048_576, maxTokens: 524_288 },
 ];
 
-function toOmpModel(m: { id: string; name?: string; api?: string; reasoning?: boolean }) {
+export function toOmpModel(m: { id: string; name?: string; api?: string; reasoning?: boolean; contextWindow?: number; maxTokens?: number }) {
   const id = m.id.replace(/^opencode\//, "");
   const native =
     m.api === "openai-responses" ||
@@ -57,8 +62,8 @@ function toOmpModel(m: { id: string; name?: string; api?: string; reasoning?: bo
     reasoning: m.reasoning ?? true,
     input: ["text", "image"] as ("text" | "image")[],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128_000,
-    maxTokens: 16_384,
+    contextWindow: m.contextWindow ?? 128_000,
+    maxTokens: m.maxTokens ?? 16_384,
   };
 }
 
@@ -197,7 +202,7 @@ export default function (pi: ExtensionAPI): void {
         const discovered = await discoverModels({});
         if (discovered.length === 0) return FALLBACK.map(toOmpModel);
         return discovered.map((m) =>
-          toOmpModel({ id: m.id, name: m.name, api: m.api, reasoning: m.reasoning }),
+          toOmpModel({ id: m.id, name: m.name, api: m.api, reasoning: m.reasoning, contextWindow: m.contextWindow, maxTokens: m.maxTokens }),
         );
       } catch {
         return FALLBACK.map(toOmpModel);
