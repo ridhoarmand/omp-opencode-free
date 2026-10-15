@@ -57,4 +57,6 @@ Untuk panduan reverse engineering dan cara update ketika ada rilis baru OpenCode
 
 ## Lisensi
 
-[GPL-3.0-or-later](./LICENSE) — © 2026 ridhoarmand
+[GPL-3.0-or-later](./LICENSE).
+
+Fork dari [pi-opencode-free karya Pedro Alexis dan kontributor](https://github.com/pedrostarkealexis/pi-opencode-free), melalui [branch ReStranger](https://github.com/ReStranger/pi-opencode-free). Hak cipta upstream tetap milik penulis aslinya; ridhoarmand memelihara perubahan OMP pada fork ini.
