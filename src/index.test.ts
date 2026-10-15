@@ -98,6 +98,7 @@ test("package.json is configured for public release and distribution", () => {
   assert.equal(pkg.private, undefined, "package must not be private");
   assert.equal(pkg.license, "GPL-3.0-or-later");
   assert.deepEqual(pkg.pi?.extensions, ["./index.ts"]);
+  assert.deepEqual(pkg.omp?.extensions, ["./omp-entry.ts"]);
   assert.ok(pkg.files?.includes("dist"));
   assert.ok(pkg.scripts?.prepack);
 });
@@ -114,7 +115,7 @@ test("every declared extension entry reaches the published tarball", () => {
     readFileSync(new URL("package.json", pkgDir), "utf8"),
   );
   const strip = (p: string) => p.replace(/^\.\//, "").replace(/\/+$/, "");
-  const declared: string[] = pkg.pi?.extensions ?? [];
+  const declared: string[] = [...(pkg.pi?.extensions ?? []), ...(pkg.omp?.extensions ?? [])];
   const published: string[] = (pkg.files ?? [])
     .filter((f: string) => !f.startsWith("!"))
     .map(strip);

@@ -25,10 +25,17 @@
   ],
   "keywords": [
     "omp-plugin",
+    "omp-package",
+    "omp-extension",
     "pi-package",
     "opencode",
     "free-models"
   ],
+  "omp": {
+    "extensions": [
+      "./omp-entry.ts"
+    ]
+  },
   "pi": {
     "extensions": [
       "./index.ts"
