@@ -27,22 +27,20 @@ import { discoverModels } from "./src/discovery.js";
 
 export const PROVIDER_ID = "opencode-free";
 
- // Fallback catalog (live discovery refreshes on `omp models` refresh;
-// ids without a known engine default to chat completions, except
-// Muse Spark which is Responses-only). Limits mirror models.dev's
-// `opencode` provider section; jev-1.13-free is a Zen-only alias with no
-// catalog entry, so it keeps the conservative defaults.
+// Fallback catalog (live discovery refreshes on `omp models` refresh;
+// ids without a known engine default to chat completions). Limits mirror
+// models.dev's `opencode` provider section; jev-1.13-free is a Zen-only alias
+// with no catalog entry, so it keeps the conservative defaults.
 const FALLBACK: { id: string; api?: string; contextWindow?: number; maxTokens?: number }[] = [
   { id: "big-pickle", contextWindow: 200_000, maxTokens: 32_000 },
-  { id: "cat-jam-free", contextWindow: 262_144, maxTokens: 131_072 },
+  { id: "beam-free", contextWindow: 1_048_576, maxTokens: 131_072 },
   { id: "mimo-v2.6-flash-free", contextWindow: 200_000, maxTokens: 32_000 },
-  { id: "muse-spark-1.2-contributor-free", api: "openai-responses", contextWindow: 1_048_576, maxTokens: 131_072 },
-  { id: "muse-spark-1.3-contributor-free", api: "openai-responses", contextWindow: 1_048_576, maxTokens: 131_072 },
+  { id: "nemotron-3.5-super-vl-free", contextWindow: 1_048_576, maxTokens: 131_072 },
   { id: "nemotron-3.5-lightning-free", contextWindow: 262_144, maxTokens: 262_144 },
   { id: "jev-1.13-free" },
-  { id: "step-5-preview-free", contextWindow: 1_000_000, maxTokens: 65_536 },
   { id: "longcat-2.5-preview-free", contextWindow: 1_000_000, maxTokens: 131_072 },
   { id: "deepseek-v4.1-flash-free", contextWindow: 200_000, maxTokens: 32_000 },
+  { id: "glm-5.3-flash-free", contextWindow: 200_000, maxTokens: 32_000 },
   { id: "space-bunny-free", contextWindow: 1_048_576, maxTokens: 524_288 },
 ];
 

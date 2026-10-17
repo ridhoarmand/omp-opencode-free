@@ -12,8 +12,7 @@ Free OpenCode models in [OMP](https://omp.sh) and [Pi](https://github.com/earend
   - Hashing session dan project ID 40-hex lowercase.
   - Injeksi definisi skema resmi OpenCode tools (`shell`, `edit`, `glob`, `grep`, `read`).
 - **Dukungan Model Free Lengkap**:
-  - Chat completions (`big-pickle`, `cat-jam-free`, `mimo-v2.6-flash-free`, `step-5-preview-free`, `space-bunny-free`, dll).
-  - Responses API (`muse-spark-1.2-contributor-free`, `muse-spark-1.3-contributor-free`).
+  - Chat completions (`big-pickle`, `beam-free`, `mimo-v2.6-flash-free`, `nemotron-3.5-super-vl-free`, `glm-5.3-flash-free`, `space-bunny-free`, dll).
   - Full streaming, reasoning blocks, dan native tool calling.
 
 ## Instalasi
@@ -37,7 +36,7 @@ pi install https://github.com/ridhoarmand/omp-opencode-free.git
 
 ## Penggunaan
 
-Pilih model free dari model picker OMP / Pi (misal `opencode-free/big-pickle`, `opencode-free/cat-jam-free`), atau jalankan langsung dari command line:
+Pilih model free dari model picker OMP / Pi (misal `opencode-free/big-pickle`, `opencode-free/beam-free`), atau jalankan langsung dari command line:
 
 ```bash
 omp -p --model opencode-free/big-pickle "baca file README.md"
